@@ -1,12 +1,14 @@
-sales_data_pipeline
+# sales_data_pipeline
 
 Pipeline de données end-to-end simulant une plateforme e-commerce — de la génération de données synthétiques jusqu'aux dashboards KPI.
 
-Stack : FastAPI · Apache Airflow · Snowflake · dbt · Power BI
+**Stack :** FastAPI · Apache Airflow · Snowflake · dbt · Power BI
 
+---
 
-Architecture
+## Architecture
 
+```
 FastAPI (Railway)
       │
       │  REST API — orders / customers / products
@@ -27,10 +29,13 @@ stg_products        →   kpi_daily_revenue
       │
       ▼
 Power BI Dashboard
+```
 
+---
 
-Structure du projet
+## Structure du projet
 
+```
 sales_data_pipeline/
 ├── api/
 │   ├── main.py                            # API FastAPI — données synthétiques avec bruit
@@ -55,24 +60,42 @@ sales_data_pipeline/
             ├── fct_sales.sql
             ├── kpi_daily_revenue.sql
             └── kpi_region_revenue.sql
+```
 
+---
 
-Data quality — par conception
+## Data quality — par conception
 
 L'API injecte intentionnellement du bruit (probabilité 20% par enregistrement) pour simuler des données réelles imparfaites. La couche staging le traite explicitement :
 
-ModèleRègle appliquéestg_ordersquantité ≤ 0 ou > 1000 → NULL · date invalide → NULLstg_productsprix ≤ 0 → NULL · flag valid_price = falsestg_customersrégion inconnue → 'Unknown'
+| Modèle | Règle appliquée |
+|---|---|
+| `stg_orders` | quantité ≤ 0 ou > 1000 → `NULL` · date invalide → `NULL` |
+| `stg_products` | prix ≤ 0 → `NULL` · flag `valid_price = false` |
+| `stg_customers` | région inconnue → `'Unknown'` |
 
+---
 
-Modèles dbt
+## Modèles dbt
 
-ModèleMatérialisationDescriptionraw_*viewPass-through direct sur les tables VARIANT Snowflakestg_ordersviewCommandes nettoyées — validation quantité et datestg_customersviewClients nettoyés — normalisation des régionsstg_productsviewProduits nettoyés — garde sur les prixfct_salestableJointure orders × products avec revenue = quantité × prixfct_sales_incrementalincrementalIdem fct_sales, dédupliqué sur order_idkpi_daily_revenueviewRevenu total journalier + nombre de commandeskpi_region_revenueviewRevenu agrégé par région client
+| Modèle | Matérialisation | Description |
+|---|---|---|
+| `raw_*` | view | Pass-through direct sur les tables VARIANT Snowflake |
+| `stg_orders` | view | Commandes nettoyées — validation quantité et date |
+| `stg_customers` | view | Clients nettoyés — normalisation des régions |
+| `stg_products` | view | Produits nettoyés — garde sur les prix |
+| `fct_sales` | table | Jointure orders × products avec revenue = quantité × prix |
+| `fct_sales_incremental` | incremental | Idem fct_sales, dédupliqué sur `order_id` |
+| `kpi_daily_revenue` | view | Revenu total journalier + nombre de commandes |
+| `kpi_region_revenue` | view | Revenu agrégé par région client |
 
+---
 
-Schéma Snowflake
+## Schéma Snowflake
 
-Les données sont stockées en VARIANT dans la couche RAW — JSON ingéré via PARSE_JSON(). Les modèles staging extraient les colonnes typées avec la syntaxe data:field::type de Snowflake.
+Les données sont stockées en `VARIANT` dans la couche RAW — JSON ingéré via `PARSE_JSON()`. Les modèles staging extraient les colonnes typées avec la syntaxe `data:field::type` de Snowflake.
 
+```
 SALES_DB
 ├── RAW
 │   ├── RAW_ORDERS     (data VARIANT, ingestion_time TIMESTAMP)
@@ -80,12 +103,15 @@ SALES_DB
 │   └── RAW_PRODUCTS   (data VARIANT, ingestion_time TIMESTAMP)
 ├── STAGING            (géré par dbt)
 └── MARTS              (géré par dbt)
+```
 
+---
 
-DAG Airflow
+## DAG Airflow
 
-sales_end_to_end_pipeline — planifié @daily
+`sales_end_to_end_pipeline` — planifié `@daily`
 
+```
 init_snowflake
       │
       ├── fetch_orders
@@ -97,60 +123,70 @@ init_snowflake
           dbt_staging
                │
            dbt_marts
+```
 
-La tâche init_snowflake est idempotente — utilise CREATE IF NOT EXISTS pour toutes les ressources (base, schémas, warehouse, tables).
+La tâche `init_snowflake` est idempotente — utilise `CREATE IF NOT EXISTS` pour toutes les ressources (base, schémas, warehouse, tables).
 
+---
 
-Dashboard Power BI
+## Dashboard Power BI
 
 Connecté directement au schéma MARTS de Snowflake. Deux pages principales :
 
+- **Revenu quotidien** — graphe linéaire sur `kpi_daily_revenue` (order_date × total_revenue)
+- **Revenu par région** — graphe en barres sur `kpi_region_revenue` (region × revenue)
 
-Revenu quotidien — graphe linéaire sur kpi_daily_revenue (order_date × total_revenue)
-Revenu par région — graphe en barres sur kpi_region_revenue (region × revenue)
+Connexion : connecteur Snowflake → Import / DirectQuery sur `SALES_DB.MARTS`
 
+---
 
-Connexion : connecteur Snowflake → Import / DirectQuery sur SALES_DB.MARTS
+## Lancer le projet
 
+### 1. API (déjà déployée sur Railway)
 
-Lancer le projet
-
-1. API (déjà déployée sur Railway)
-
+```
 https://web-production-cf3ff.up.railway.app
+```
 
-Endpoints : /orders?limit=N · /customers?limit=N · /products
+Endpoints : `/orders?limit=N` · `/customers?limit=N` · `/products`
 
-2. Airflow
+### 2. Airflow
 
-bashpip install apache-airflow snowflake-connector-python requests
+```bash
+pip install apache-airflow snowflake-connector-python requests
 
 # Copier le DAG dans le dossier Airflow
 cp airflow/dags/sales_end_to_end_pipeline.py ~/airflow/dags/
 
 airflow standalone
+```
 
-3. dbt
+### 3. dbt
 
-bashcd dbt_projectt
+```bash
+cd dbt_projectt
 pip install dbt-snowflake
 
 # Configurer profiles.yml avec tes credentials Snowflake
 dbt debug
 dbt run
 dbt test
+```
 
+---
 
-Concepts clés illustrés
+## Concepts clés illustrés
 
+- **Ingestion semi-structurée** — pattern Snowflake VARIANT + PARSE_JSON
+- **Transformation en couches** — séparation Raw / Staging / Marts (approche medallion)
+- **Modèles incrementaux** — `fct_sales_incremental` dédupliqué sur clé unique
+- **Qualité des données** — logique CASE défensive en staging, tests dbt (not_null, unique)
+- **Orchestration** — DAG Airflow avec ingestion parallèle + couches dbt séquentielles
+- **Déploiement** — FastAPI sur Railway, dbt ciblant Snowflake cloud
 
-Ingestion semi-structurée — pattern Snowflake VARIANT + PARSE_JSON
-Transformation en couches — séparation Raw / Staging / Marts (approche medallion)
-Modèles incrementaux — fct_sales_incremental dédupliqué sur clé unique
-Qualité des données — logique CASE défensive en staging, tests dbt (not_null, unique)
-Orchestration — DAG Airflow avec ingestion parallèle + couches dbt séquentielles
-Déploiement — FastAPI sur Railway, dbt ciblant Snowflake cloud
+---
 
+## Auteur
 
-
-Auteur:ABOU ELOUAFA Zakaria
+Zakaria — Data Engineering · Master BD2C  
+[LinkedIn](https://linkedin.com/in/) · [GitHub](https://github.com/)
