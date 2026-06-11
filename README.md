@@ -188,5 +188,5 @@ dbt test
 
 ## Auteur
 
-Zakaria — Data Engineering · Master BD2C  
-[LinkedIn](https://linkedin.com/in/) · [GitHub](https://github.com/)
+ABOU ELOUAFA Zakaria
+[LinkedIn](www.linkedin.com/in/abou-elouafa-zakaria-285a72224) 
