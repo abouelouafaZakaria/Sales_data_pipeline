@@ -1,0 +1,16 @@
+sales_env/
+__pycache__/
+*.py[cod]
+.env
+**/profiles.yml
+dbt_projectt/target/
+dbt_projectt/logs/
+dbt_projectt/.user.yml
+airflow/logs/
+airflow/airflow.db
+airflow/airflow.cfg
+airflow/webserver_config.py
+airflow/standalone_admin_password.txt
+.DS_Store
+.vscode/
+.idea/
